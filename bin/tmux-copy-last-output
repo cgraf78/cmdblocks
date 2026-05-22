@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# Copy the last N commands and their output from the current tmux pane to the
+# clipboard. Parses pane content for prompt boundaries to isolate
+# command+output blocks.
+#
+# Prompt format (two-line):
+#   [exit_code] user@host:path (branch)
+#   $ command   (bash)
+#   % command   (zsh)
+#
+# Usage: tmux-copy-last-output [count]   (default: 1)
+
+set -euo pipefail
+
+count="${1:-1}"
+
+content=$(tmux capture-pane -p -S -500)
+
+output=$(printf '%s\n' "$content" | awk -v count="$count" '
+# Two-line prompt detection:
+#   Line 1: [optional exit code] user@host:path (git info) timing
+#   Line 2: $ command
+#
+# Buffer line-1 candidates so output lines that happen to match the
+# user@host: pattern are not silently dropped.
+
+# Flush an unconfirmed line-1 candidate back into regular output.
+function flush_candidate() {
+  if (cand_nr > 0) {
+    lines[cand_nr] = cand_line
+    cand_nr = 0
+  }
+}
+
+# Match prompt line 1: optional [N] then user@host:
+/^(\[?[0-9]*\]? ?)?[a-zA-Z0-9_]+@[a-zA-Z0-9._-]+:/ {
+  flush_candidate()
+  cand_nr = NR
+  cand_line = $0
+  next
+}
+
+# Match prompt line 2: $ (bash) or % (zsh), with optional command,
+# immediately after line 1.  tmux trims trailing whitespace, so a bare
+# prompt with no command appears as just "$" or "%".
+/^[$%]($| )/ {
+  if (cand_nr > 0 && NR == cand_nr + 1) {
+    n++
+    prompts[n] = cand_nr
+    cmd_lines[n] = (length($0) > 2) ? substr($0, 3) : ""
+    shell_char[n] = substr($0, 1, 1)
+    cand_nr = 0
+    next
+  }
+  # Not preceded by a line-1 match — treat as regular output
+  flush_candidate()
+}
+
+{ lines[NR] = $0 }
+
+END {
+  flush_candidate()
+  if (n < 2) exit 1
+  start = n - count
+  if (start < 1) start = 1
+  first = 1
+  for (c = start; c < n; c++) {
+    if (!first) print ""
+    first = 0
+    cmd = cmd_lines[c]
+    if (cmd != "") print shell_char[c] " " cmd
+    out_start = prompts[c] + 2
+    out_end = prompts[c+1] - 1
+    for (i = out_start; i <= out_end; i++)
+      if (i in lines) print lines[i]
+  }
+}
+') || true
+
+if [[ -z "$output" ]]; then
+  tmux display-message "No command output found"
+  exit 0
+fi
+
+fail_copy() {
+  local backend="$1"
+  local details="${2:-unknown error}"
+
+  details="${details//$'\n'/ }"
+  tmux display-message "Clipboard copy failed via $backend: $details"
+  exit 0
+}
+
+copy_with() {
+  { printf '%s' "$output" | "$@" >/dev/null; } 2>&1
+}
+
+copy_osc52() {
+  # Send OSC 52 directly to the attached client's TTY, bypassing
+  # run-shell's stdout capture which would print the escape literally
+  local encoded
+  encoded=$(printf '%s' "$output" | base64 | tr -d '\n')
+  local tty
+  tty=$(tmux display-message -p '#{client_tty}')
+  if [[ -z "$tty" ]]; then
+    printf 'tmux has no attached client TTY\n' >&2
+    return 1
+  fi
+  if ! printf $'\033]52;c;%s\033\\' "$encoded" >"$tty" 2>/dev/null; then
+    printf 'could not write to client TTY %s\n' "$tty" >&2
+    return 1
+  fi
+}
+
+copy_errors=()
+copied=false
+if command -v pbcopy &>/dev/null; then
+  if ! err=$(copy_with pbcopy); then
+    copy_errors+=("pbcopy: ${err:-unknown error}")
+  else
+    copied=true
+  fi
+fi
+
+if [[ "$copied" == false ]] && command -v xclip &>/dev/null && [[ -n "${DISPLAY:-}" ]]; then
+  if ! err=$(copy_with xclip -selection clipboard); then
+    copy_errors+=("xclip: ${err:-unknown error}")
+  else
+    copied=true
+  fi
+fi
+
+if [[ "$copied" == false ]]; then
+  if ! err=$(copy_osc52); then
+    copy_errors+=("OSC 52: ${err:-unknown error}")
+  else
+    copied=true
+  fi
+fi
+
+if [[ "$copied" == false ]]; then
+  fail_copy "available backends" "${copy_errors[*]}"
+fi
+
+if ((count == 1)); then
+  tmux display-message "Copied last command + output to clipboard"
+else
+  tmux display-message "Copied last $count commands + output to clipboard"
+fi

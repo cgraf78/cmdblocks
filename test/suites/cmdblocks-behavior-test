@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Behavioral tests for terminal command-block helpers.
+
+set -o pipefail
+export NO_COLOR=1
+
+CMDBLOCKS_TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+CMDBLOCKS_ROOT="$(cd -- "$CMDBLOCKS_TEST_DIR/.." && pwd -P)"
+
+# shellcheck source=../helpers.sh
+. "$CMDBLOCKS_TEST_DIR/helpers.sh"
+
+echo "=== public shell API ==="
+
+shell_api_output=$(
+  CMDBLOCKS_ROOT="$CMDBLOCKS_ROOT" bash --noprofile --norc -c '
+    source "$CMDBLOCKS_ROOT/share/cmdblocks/shell.sh"
+    printf "loaded=%s\n" "${CMDBLOCKS_SHELL_LOADED:-0}"
+  '
+)
+_assert_contains "shell api: loader is sourceable" \
+  "loaded=1" "$shell_api_output"
+
+echo "=== tmux-copy-last-output ==="
+
+tmp=$(_tmpdir)
+mock_bin="$tmp/bin"
+mkdir -p "$mock_bin"
+
+cat >"$mock_bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  capture-pane)
+    cat "$TMUX_CAPTURE_FILE"
+    ;;
+  display-message)
+    if [[ "${2:-}" == "-p" && "${3:-}" == "#{client_tty}" ]]; then
+      printf '%s\n' "${TMUX_CLIENT_TTY:-}"
+    else
+      printf '%s\n' "$*" >>"$TMUX_MESSAGE_LOG"
+    fi
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+cat >"$mock_bin/pbcopy" <<'EOF'
+#!/usr/bin/env bash
+cat >"$PBCOPY_OUT"
+EOF
+chmod +x "$mock_bin/tmux" "$mock_bin/pbcopy"
+
+cat >"$tmp/pane.txt" <<'EOF'
+user@test:/repo (main)
+$ echo one
+one output
+user@test:/repo (main)
+$ echo two
+two output
+user@test:/repo (main)
+$
+EOF
+
+TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+  TMUX_MESSAGE_LOG="$tmp/messages.log" \
+  PBCOPY_OUT="$tmp/copied-one.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output"
+_assert_file_content "copy last output: copies command and output" \
+  '$ echo two
+two output' "$tmp/copied-one.txt"
+_assert_contains "copy last output: reports single block" \
+  "Copied last command + output to clipboard" "$(cat "$tmp/messages.log")"
+
+TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+  TMUX_MESSAGE_LOG="$tmp/messages-two.log" \
+  PBCOPY_OUT="$tmp/copied-two.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output" 2
+_assert_file_content "copy two outputs: preserves block separator" \
+  '$ echo one
+one output
+
+$ echo two
+two output' "$tmp/copied-two.txt"
+_assert_contains "copy two outputs: reports requested count" \
+  "Copied last 2 commands + output to clipboard" "$(cat "$tmp/messages-two.log")"
+
+cat >"$tmp/no-command.txt" <<'EOF'
+plain output only
+EOF
+TMUX_CAPTURE_FILE="$tmp/no-command.txt" \
+  TMUX_MESSAGE_LOG="$tmp/no-command-message.log" \
+  PBCOPY_OUT="$tmp/no-command-copy.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output"
+_assert_file_missing "copy no output: does not write clipboard" "$tmp/no-command-copy.txt"
+_assert_contains "copy no output: reports missing block" \
+  "No command output found" "$(cat "$tmp/no-command-message.log")"
+
+echo
+echo "=== term-notify-sound ==="
+
+notify_home="$tmp/notify-home"
+env -u TMUX HOME="$notify_home" TERM_PROGRAM=xterm.js PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+_assert_file_exists "notify: VS Code terminal touches signal file" \
+  "$notify_home/.local/state/term-notify/signal"
+
+tmux_notify_home="$tmp/tmux-notify-home"
+cat >"$mock_bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  display-message)
+    if [[ "${2:-}" == "-p" && "${3:-}" == "#{client_termtype}" ]]; then
+      printf '%s\n' "$TMUX_CLIENT_TERMTYPE"
+    elif [[ "${2:-}" == "-t" && "${4:-}" == "-p" && "${5:-}" == "#{pane_tty}" ]]; then
+      printf '%s\n' "$TMUX_PANE_TTY"
+    fi
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+chmod +x "$mock_bin/tmux"
+HOME="$tmux_notify_home" TMUX=/tmp/tmux-test TMUX_CLIENT_TERMTYPE=xterm.js \
+  PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+_assert_file_exists "notify: tmux VS Code terminal still uses signal file" \
+  "$tmux_notify_home/.local/state/term-notify/signal"
+
+_test_summary
