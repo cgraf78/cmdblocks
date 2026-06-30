@@ -1,0 +1,36 @@
+.TH TMUX-COPY-LAST-OUTPUT 1 "2026-06-30" "cmdblocks" "User Commands"
+.SH NAME
+tmux-copy-last-output \- copy recent tmux command blocks to the clipboard
+.SH SYNOPSIS
+.B tmux-copy-last-output
+.RI [ count ]
+.SH DESCRIPTION
+.B tmux-copy-last-output
+captures the current tmux pane, detects shell prompt boundaries, and copies the
+most recent command plus its output to the clipboard. When
+.I count
+is supplied, it copies that many recent command blocks.
+.PP
+The parser is tuned for the two-line prompt shape used by the surrounding
+terminal setup. If no complete command block is found, the command displays a
+tmux message and exits successfully so keybindings do not fail noisily.
+.SH CLIPBOARD BACKENDS
+The command tries
+.BR pbcopy (1)
+on macOS,
+.BR xclip (1)
+when
+.B DISPLAY
+is set, and finally OSC 52 through the attached tmux client TTY.
+.SH EXIT STATUS
+.TP
+.B 0
+The command copied output, reported that no block was found, or displayed a
+clipboard failure message through tmux.
+.TP
+.B 1
+An unexpected shell, tmux, or parsing failure occurred before tmux messaging
+could report the result.
+.SH SEE ALSO
+.BR tmux (1),
+.BR term-notify-sound (1)

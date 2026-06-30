@@ -30,8 +30,8 @@ dependency manager's contract:
 - Bash for the CLI entry points.
 - `tmux` is required by `tmux-copy-last-output` and by tmux-aware notification
   routing.
-- A clipboard backend is required for copying command output: `pbcopy` on macOS
-  or `xclip` with `DISPLAY` on X11.
+- `tmux-copy-last-output` copies through `pbcopy` on macOS, `xclip` with
+  `DISPLAY` on X11, or OSC 52 through the attached tmux client TTY.
 - `term-notify-sound` works best in terminals that understand its notification
   signals. It writes WezTerm OSC user variables when running under WezTerm and
   falls back to a state-file signal for VS Code-style terminals.
