@@ -12,12 +12,16 @@ CMDBLOCKS_REPO_ROOT="$(cd -- "$CMDBLOCKS_TEST_DIR/.." && pwd -P)"
 
 echo "=== cmdblocks: manpages ==="
 
-for command in tmux-copy-last-output term-notify-sound; do
+while IFS= read -r command; do
   page="$CMDBLOCKS_REPO_ROOT/man/man1/$command.1"
   _assert_file_exists "manpage exists: $command" "$page"
   content=$(cat "$page")
   _assert_contains "manpage NAME section: $command" ".SH NAME" "$content"
   _assert_contains "manpage names command: $command" "$command \\" "$content"
-done
+done < <(
+  git -C "$CMDBLOCKS_REPO_ROOT" ls-files -- 'bin/*' |
+    xargs -n 1 basename |
+    sort
+)
 
 _test_summary
