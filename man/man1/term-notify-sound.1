@@ -14,8 +14,13 @@ When running inside tmux, OSC sequences are wrapped for tmux passthrough. If
 is unavailable, the helper attempts to write to the current pane TTY.
 .SH FILES
 .TP
-.I ~/.local/state/term-notify/signal
+.I $XDG_STATE_HOME/term-notify/signal
 Signal file touched for VS Code-style terminal integrations.
+.PP
+When
+.B XDG_STATE_HOME
+is unset, empty, or not an absolute path, the signal file is written to
+.IR ~/.local/state/term-notify/signal .
 .SH EXIT STATUS
 .TP
 .B 0

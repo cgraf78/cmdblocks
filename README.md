@@ -34,7 +34,9 @@ dependency manager's contract:
   `DISPLAY` on X11, or OSC 52 through the attached tmux client TTY.
 - `term-notify-sound` works best in terminals that understand its notification
   signals. It writes WezTerm OSC user variables when running under WezTerm and
-  falls back to a state-file signal for VS Code-style terminals.
+  falls back to a state-file signal for VS Code-style terminals. The signal is
+  written under an absolute `$XDG_STATE_HOME`, or under `~/.local/state` when
+  that variable is unset, empty, or relative.
 
 Keybindings, shell hooks, and host-specific terminal config belong to the
 consumer that installs `cmdblocks`; this repo owns reusable command-boundary

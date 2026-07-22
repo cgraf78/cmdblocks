@@ -9,8 +9,20 @@
 
 set -u
 
-SIGNAL_DIR="$HOME/.local/state/term-notify"
-SIGNAL_FILE="$SIGNAL_DIR/signal"
+_state_home() {
+  local candidate="${XDG_STATE_HOME:-}"
+
+  if [[ "$candidate" == /* ]]; then
+    REPLY="$candidate"
+  elif [[ -n "${HOME:-}" ]]; then
+    REPLY="$HOME/.local/state"
+  else
+    REPLY=""
+    printf '%s\n' \
+      'term-notify-sound: HOME is not set and XDG_STATE_HOME is not absolute' >&2
+    return 1
+  fi
+}
 
 notify_osc() {
   local val
@@ -52,6 +64,13 @@ send_tty_notify() {
 # VS Code: signal via file (no pty interaction needed).
 ct=$(_client_termtype)
 if [[ "$ct" == xterm.js* ]]; then
+  # Only the VS Code transport owns persistent state. TTY transports must
+  # remain usable in sparse environments where neither HOME nor an absolute
+  # XDG state root is available.
+  _state_home || exit 1
+  STATE_HOME="$REPLY"
+  SIGNAL_DIR="$STATE_HOME/term-notify"
+  SIGNAL_FILE="$SIGNAL_DIR/signal"
   mkdir -p "$SIGNAL_DIR"
   touch "$SIGNAL_FILE"
 elif (send_tty_notify >/dev/tty) 2>/dev/null; then
