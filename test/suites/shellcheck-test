@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Keep the lint inventory explicit while failing when a new shell program is
+# added without a deliberate review of whether ShellCheck should cover it.
+
+set -euo pipefail
+
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+
+shell_files=(
+  bin/term-notify-sound
+  bin/tmux-copy-last-output
+  share/cmdblocks/shell.sh
+  test/cmdblocks-test
+  test/helpers.sh
+  test/suites/cmdblocks-behavior-test
+  test/suites/manpage-test
+  test/suites/shellcheck-test
+)
+
+tracked_shell_files=()
+while IFS= read -r path; do
+  case "$path" in
+    *.sh)
+      tracked_shell_files+=("$path")
+      ;;
+    *)
+      IFS= read -r first_line <"$root/$path" || true
+      case "$first_line" in
+        '#!'*sh*) tracked_shell_files+=("$path") ;;
+      esac
+      ;;
+  esac
+done < <(git -C "$root" ls-files -- bin share test)
+
+if ! diff -u \
+  <(printf '%s\n' "${shell_files[@]}" | LC_ALL=C sort) \
+  <(printf '%s\n' "${tracked_shell_files[@]}" | LC_ALL=C sort); then
+  printf 'shellcheck-test: update the shell file inventory\n' >&2
+  exit 1
+fi
+
+if ! command -v shellcheck >/dev/null 2>&1; then
+  printf 'shellcheck-test: shellcheck is required\n' >&2
+  exit 1
+fi
+
+absolute_files=()
+for path in "${shell_files[@]}"; do
+  absolute_files+=("$root/$path")
+done
+
+shellcheck -x -P SCRIPTDIR "${absolute_files[@]}"
+
+printf 'shellcheck-test: ok\n'
