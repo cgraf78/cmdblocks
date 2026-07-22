@@ -9,7 +9,22 @@
 
 set -u
 
-SIGNAL_DIR="$HOME/.local/state/term-notify"
+_state_home() {
+  local candidate="${XDG_STATE_HOME:-}"
+
+  if [[ "$candidate" == /* ]]; then
+    printf '%s\n' "$candidate"
+  elif [[ -n "${HOME:-}" ]]; then
+    printf '%s\n' "$HOME/.local/state"
+  else
+    printf '%s\n' \
+      'term-notify-sound: HOME is not set and XDG_STATE_HOME is not absolute' >&2
+    return 1
+  fi
+}
+
+STATE_HOME=$(_state_home) || exit 1
+SIGNAL_DIR="$STATE_HOME/term-notify"
 SIGNAL_FILE="$SIGNAL_DIR/signal"
 
 notify_osc() {
