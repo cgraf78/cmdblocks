@@ -8,11 +8,23 @@
 #   $ command   (bash)
 #   % command   (zsh)
 #
-# Usage: tmux-copy-last-output [count]   (default: 1)
+# Usage: tmux-copy-last-output [positive-count]   (default: 1)
 
 set -euo pipefail
 
-count="${1:-1}"
+usage() {
+  printf 'usage: tmux-copy-last-output [positive-count]\n' >&2
+  exit 64
+}
+
+(($# <= 1)) || usage
+count="${1-1}"
+if [[ ! "$count" =~ ^[0-9]+$ || ! "$count" =~ [1-9] ]]; then
+  usage
+fi
+# Normalize leading zeroes so later string and arithmetic consumers always see
+# an unambiguous base-10 value.
+count="${count#"${count%%[!0]*}"}"
 
 content=$(tmux capture-pane -p -S -500)
 
@@ -142,7 +154,7 @@ if [[ "$copied" == false ]]; then
   fail_copy "available backends" "${copy_errors[*]}"
 fi
 
-if ((count == 1)); then
+if [[ "$count" == 1 ]]; then
   tmux display-message "Copied last command + output to clipboard"
 else
   tmux display-message "Copied last $count commands + output to clipboard"

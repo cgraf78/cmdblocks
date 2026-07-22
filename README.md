@@ -13,7 +13,8 @@ wrapper scripts.
 
 ## Public API
 
-- `bin/tmux-copy-last-output`: copy recent tmux command output blocks.
+- `bin/tmux-copy-last-output`: copy one or a positive number of recent tmux
+  command output blocks.
 - `bin/term-notify-sound`: emit terminal-aware completion notifications.
 - `share/cmdblocks/shell.sh`: stable no-op shell loader for integration
   harnesses that source each dependency's shell API uniformly.
