@@ -13,10 +13,11 @@ _state_home() {
   local candidate="${XDG_STATE_HOME:-}"
 
   if [[ "$candidate" == /* ]]; then
-    printf '%s\n' "$candidate"
+    REPLY="$candidate"
   elif [[ -n "${HOME:-}" ]]; then
-    printf '%s\n' "$HOME/.local/state"
+    REPLY="$HOME/.local/state"
   else
+    REPLY=""
     printf '%s\n' \
       'term-notify-sound: HOME is not set and XDG_STATE_HOME is not absolute' >&2
     return 1
@@ -66,7 +67,8 @@ if [[ "$ct" == xterm.js* ]]; then
   # Only the VS Code transport owns persistent state. TTY transports must
   # remain usable in sparse environments where neither HOME nor an absolute
   # XDG state root is available.
-  STATE_HOME=$(_state_home) || exit 1
+  _state_home || exit 1
+  STATE_HOME="$REPLY"
   SIGNAL_DIR="$STATE_HOME/term-notify"
   SIGNAL_FILE="$SIGNAL_DIR/signal"
   mkdir -p "$SIGNAL_DIR"

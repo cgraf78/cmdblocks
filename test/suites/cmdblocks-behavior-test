@@ -133,6 +133,14 @@ env -u HOME -u TMUX XDG_STATE_HOME="$xdg_state_home" TERM_PROGRAM=xterm.js \
 _assert_file_exists "notify: absolute XDG state works without HOME" \
   "$xdg_state_home/term-notify/signal"
 
+newline_xdg_state="$tmp/newline-state"$'\n'
+env -u HOME -u TMUX XDG_STATE_HOME="$newline_xdg_state" TERM_PROGRAM=xterm.js \
+  PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+_assert_file_exists "notify: XDG state preserves trailing newline bytes" \
+  "$newline_xdg_state/term-notify/signal"
+_assert_file_missing "notify: XDG state is not truncated by command substitution" \
+  "${newline_xdg_state%$'\n'}/term-notify/signal"
+
 for terminal in WezTerm unknown-terminal; do
   env -u HOME -u TMUX -u XDG_STATE_HOME TERM_PROGRAM="$terminal" \
     PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound" \
