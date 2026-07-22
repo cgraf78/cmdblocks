@@ -23,10 +23,6 @@ _state_home() {
   fi
 }
 
-STATE_HOME=$(_state_home) || exit 1
-SIGNAL_DIR="$STATE_HOME/term-notify"
-SIGNAL_FILE="$SIGNAL_DIR/signal"
-
 notify_osc() {
   local val
   val=$(printf 1 | base64)
@@ -67,6 +63,12 @@ send_tty_notify() {
 # VS Code: signal via file (no pty interaction needed).
 ct=$(_client_termtype)
 if [[ "$ct" == xterm.js* ]]; then
+  # Only the VS Code transport owns persistent state. TTY transports must
+  # remain usable in sparse environments where neither HOME nor an absolute
+  # XDG state root is available.
+  STATE_HOME=$(_state_home) || exit 1
+  SIGNAL_DIR="$STATE_HOME/term-notify"
+  SIGNAL_FILE="$SIGNAL_DIR/signal"
   mkdir -p "$SIGNAL_DIR"
   touch "$SIGNAL_FILE"
 elif (send_tty_notify >/dev/tty) 2>/dev/null; then

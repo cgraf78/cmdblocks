@@ -133,6 +133,15 @@ env -u HOME -u TMUX XDG_STATE_HOME="$xdg_state_home" TERM_PROGRAM=xterm.js \
 _assert_file_exists "notify: absolute XDG state works without HOME" \
   "$xdg_state_home/term-notify/signal"
 
+for terminal in WezTerm unknown-terminal; do
+  env -u HOME -u TMUX -u XDG_STATE_HOME TERM_PROGRAM="$terminal" \
+    PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound" \
+    >/dev/null 2>"$tmp/notify-$terminal.err"
+  _assert_exit "notify: $terminal transport does not require a state root" "0" "$?"
+  _assert_eq "notify: $terminal transport does not report a state-path error" \
+    "" "$(cat "$tmp/notify-$terminal.err")"
+done
+
 tmux_notify_home="$tmp/tmux-notify-home"
 cat >"$mock_bin/tmux" <<'EOF'
 #!/usr/bin/env bash
