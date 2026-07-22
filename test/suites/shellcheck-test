@@ -32,10 +32,13 @@ while IFS= read -r path; do
   esac
 done < <(git -C "$root" ls-files -- bin share test)
 
-if ! diff -u \
-  <(printf '%s\n' "${shell_files[@]}" | LC_ALL=C sort) \
-  <(printf '%s\n' "${tracked_shell_files[@]}" | LC_ALL=C sort); then
+expected_inventory="$(printf '%s\n' "${shell_files[@]}" | LC_ALL=C sort)"
+tracked_inventory="$(printf '%s\n' "${tracked_shell_files[@]}" | LC_ALL=C sort)"
+
+if [[ "$expected_inventory" != "$tracked_inventory" ]]; then
   printf 'shellcheck-test: update the shell file inventory\n' >&2
+  printf 'expected:\n%s\ntracked:\n%s\n' \
+    "$expected_inventory" "$tracked_inventory" >&2
   exit 1
 fi
 
