@@ -29,6 +29,9 @@ mkdir -p "$mock_bin"
 
 cat >"$mock_bin/tmux" <<'EOF'
 #!/usr/bin/env bash
+if [[ -n "${TMUX_CALL_LOG:-}" ]]; then
+  printf '%s\n' "$*" >>"$TMUX_CALL_LOG"
+fi
 case "$1" in
   capture-pane)
     cat "$TMUX_CAPTURE_FILE"
@@ -47,6 +50,9 @@ esac
 EOF
 cat >"$mock_bin/pbcopy" <<'EOF'
 #!/usr/bin/env bash
+if [[ -n "${PBCOPY_CALL_LOG:-}" ]]; then
+  printf 'pbcopy\n' >>"$PBCOPY_CALL_LOG"
+fi
 cat >"$PBCOPY_OUT"
 EOF
 chmod +x "$mock_bin/tmux" "$mock_bin/pbcopy"
@@ -74,6 +80,17 @@ _assert_contains "copy last output: reports single block" \
   "Copied last command + output to clipboard" "$(cat "$tmp/messages.log")"
 
 TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+  TMUX_MESSAGE_LOG="$tmp/messages-one.log" \
+  PBCOPY_OUT="$tmp/copied-explicit-one.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output" 1
+_assert_file_content "copy explicit one: copies one command and output" \
+  '$ echo two
+two output' "$tmp/copied-explicit-one.txt"
+_assert_contains "copy explicit one: reports single block" \
+  "Copied last command + output to clipboard" "$(cat "$tmp/messages-one.log")"
+
+TMUX_CAPTURE_FILE="$tmp/pane.txt" \
   TMUX_MESSAGE_LOG="$tmp/messages-two.log" \
   PBCOPY_OUT="$tmp/copied-two.txt" \
   PATH="$mock_bin:$PATH" \
@@ -86,6 +103,68 @@ $ echo two
 two output' "$tmp/copied-two.txt"
 _assert_contains "copy two outputs: reports requested count" \
   "Copied last 2 commands + output to clipboard" "$(cat "$tmp/messages-two.log")"
+
+TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+  TMUX_MESSAGE_LOG="$tmp/messages-leading-zero.log" \
+  PBCOPY_OUT="$tmp/copied-leading-zero.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output" 0002
+_assert_file_content "copy leading-zero count: preserves selected blocks" \
+  '$ echo one
+one output
+
+$ echo two
+two output' "$tmp/copied-leading-zero.txt"
+_assert_contains "copy leading-zero count: reports normalized count" \
+  "Copied last 2 commands + output to clipboard" \
+  "$(cat "$tmp/messages-leading-zero.log")"
+
+huge_count=999999999999999999999999999999999999999999999999999999999999
+TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+  TMUX_MESSAGE_LOG="$tmp/messages-huge.log" \
+  PBCOPY_OUT="$tmp/copied-huge.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output" "$huge_count"
+_assert_file_content "copy huge count: clamps to available blocks" \
+  '$ echo one
+one output
+
+$ echo two
+two output' "$tmp/copied-huge.txt"
+_assert_contains "copy huge count: avoids arithmetic overflow" \
+  "Copied last $huge_count commands + output to clipboard" \
+  "$(cat "$tmp/messages-huge.log")"
+
+invalid_index=0
+assert_invalid_count() {
+  local description="$1"
+  shift
+  invalid_index=$((invalid_index + 1))
+
+  local tmux_log="$tmp/invalid-$invalid_index-tmux.log"
+  local pbcopy_log="$tmp/invalid-$invalid_index-pbcopy.log"
+  local output rc
+  output=$(TMUX_CALL_LOG="$tmux_log" \
+    PBCOPY_CALL_LOG="$pbcopy_log" \
+    TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+    TMUX_MESSAGE_LOG="$tmp/invalid-$invalid_index-message.log" \
+    PBCOPY_OUT="$tmp/invalid-$invalid_index-copy.txt" \
+    PATH="$mock_bin:$PATH" \
+    "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output" "$@" 2>&1)
+  rc=$?
+
+  _assert_exit "$description: exits with usage status" 64 "$rc"
+  _assert_eq "$description: prints concise usage" \
+    "usage: tmux-copy-last-output [positive-count]" "$output"
+  _assert_file_missing "$description: does not invoke tmux" "$tmux_log"
+  _assert_file_missing "$description: does not invoke clipboard" "$pbcopy_log"
+}
+
+assert_invalid_count "copy zero count" 0
+assert_invalid_count "copy negative count" -1
+assert_invalid_count "copy nonnumeric count" two
+assert_invalid_count "copy empty count" ""
+assert_invalid_count "copy extra arguments" 1 2
 
 cat >"$tmp/no-command.txt" <<'EOF'
 plain output only
