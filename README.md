@@ -33,11 +33,11 @@ dependency manager's contract:
   routing.
 - `tmux-copy-last-output` copies through `pbcopy` on macOS, `xclip` with
   `DISPLAY` on X11, or OSC 52 through the attached tmux client TTY.
-- `term-notify-sound` works best in terminals that understand its notification
-  signals. It writes WezTerm OSC user variables when running under WezTerm and
-  falls back to a state-file signal for VS Code-style terminals. The signal is
-  written under an absolute `$XDG_STATE_HOME`, or under `~/.local/state` when
-  that variable is unset, empty, or relative.
+- `term-notify-sound` emits a standard BEL to the controlling terminal. Because
+  BEL travels over the terminal stream, the terminal client renders the sound
+  for local shells, remote-development sessions, and tmux panes alike. Set
+  `TERM_NOTIFY_TTY` only when the caller needs to override `/dev/tty`; tmux pane
+  routing remains the automatic fallback.
 
 Keybindings, shell hooks, and host-specific terminal config belong to the
 consumer that installs `cmdblocks`; this repo owns reusable command-boundary

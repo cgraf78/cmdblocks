@@ -182,54 +182,41 @@ echo
 echo "=== term-notify-sound ==="
 
 notify_home="$tmp/notify-home"
+direct_vscode_tty="$tmp/direct-vscode.tty"
 env -u TMUX -u XDG_STATE_HOME HOME="$notify_home" TERM_PROGRAM=xterm.js \
+  TERM_NOTIFY_TTY="$direct_vscode_tty" \
   PATH="$mock_bin:$PATH" \
-  "$CMDBLOCKS_ROOT/bin/term-notify-sound"
-_assert_file_exists "notify: unset XDG state uses HOME fallback" \
+  "$CMDBLOCKS_ROOT/bin/term-notify-sound" >/dev/null
+_assert_file_content "notify: direct VS Code emits one BEL" \
+  $'\a' "$direct_vscode_tty"
+_assert_file_missing "notify: direct VS Code uses no state-file transport" \
   "$notify_home/.local/state/term-notify/signal"
 
-empty_xdg_home="$tmp/empty-xdg-home"
-env -u TMUX HOME="$empty_xdg_home" XDG_STATE_HOME= TERM_PROGRAM=xterm.js \
-  PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
-_assert_file_exists "notify: empty XDG state uses HOME fallback" \
-  "$empty_xdg_home/.local/state/term-notify/signal"
-
-relative_xdg_home="$tmp/relative-xdg-home"
-(
-  cd "$tmp" || exit 1
-  env -u TMUX HOME="$relative_xdg_home" XDG_STATE_HOME=relative-state \
-    TERM_PROGRAM=xterm.js PATH="$mock_bin:$PATH" \
-    "$CMDBLOCKS_ROOT/bin/term-notify-sound"
-)
-_assert_file_exists "notify: relative XDG state uses HOME fallback" \
-  "$relative_xdg_home/.local/state/term-notify/signal"
-_assert_file_missing "notify: relative XDG state is not used" \
-  "$tmp/relative-state/term-notify/signal"
-
-xdg_state_home="$tmp/xdg state"
-env -u HOME -u TMUX XDG_STATE_HOME="$xdg_state_home" TERM_PROGRAM=xterm.js \
-  PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
-_assert_file_exists "notify: absolute XDG state works without HOME" \
-  "$xdg_state_home/term-notify/signal"
-
-newline_xdg_state="$tmp/newline-state"$'\n'
-env -u HOME -u TMUX XDG_STATE_HOME="$newline_xdg_state" TERM_PROGRAM=xterm.js \
-  PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
-_assert_file_exists "notify: XDG state preserves trailing newline bytes" \
-  "$newline_xdg_state/term-notify/signal"
-_assert_file_missing "notify: XDG state is not truncated by command substitution" \
-  "${newline_xdg_state%$'\n'}/term-notify/signal"
+vscode_no_home_err="$tmp/vscode-no-home.err"
+vscode_no_home_tty="$tmp/vscode-no-home.tty"
+env -u HOME -u TMUX -u XDG_STATE_HOME TERM_PROGRAM=xterm.js \
+  TERM_NOTIFY_TTY="$vscode_no_home_tty" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/term-notify-sound" >/dev/null 2>"$vscode_no_home_err"
+_assert_exit "notify: direct VS Code needs no filesystem state root" "0" "$?"
+_assert_eq "notify: direct VS Code reports no state-path error" \
+  "" "$(cat "$vscode_no_home_err")"
+_assert_file_content "notify: HOME-less VS Code still emits one BEL" \
+  $'\a' "$vscode_no_home_tty"
 
 for terminal in WezTerm unknown-terminal; do
+  terminal_tty="$tmp/direct-$terminal.tty"
   env -u HOME -u TMUX -u XDG_STATE_HOME TERM_PROGRAM="$terminal" \
+    TERM_NOTIFY_TTY="$terminal_tty" \
     PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound" \
     >/dev/null 2>"$tmp/notify-$terminal.err"
   _assert_exit "notify: $terminal transport does not require a state root" "0" "$?"
   _assert_eq "notify: $terminal transport does not report a state-path error" \
     "" "$(cat "$tmp/notify-$terminal.err")"
+  _assert_file_content "notify: direct $terminal emits one BEL" \
+    $'\a' "$terminal_tty"
 done
 
-tmux_notify_home="$tmp/tmux-notify-home"
 cat >"$mock_bin/tmux" <<'EOF'
 #!/usr/bin/env bash
 case "$1" in
@@ -246,13 +233,17 @@ case "$1" in
 esac
 EOF
 chmod +x "$mock_bin/tmux"
-tmux_xdg_state="$tmp/tmux-xdg-state"
-HOME="$tmux_notify_home" XDG_STATE_HOME="$tmux_xdg_state" TMUX=/tmp/tmux-test \
-  TMUX_CLIENT_TERMTYPE=xterm.js PATH="$mock_bin:$PATH" \
-  "$CMDBLOCKS_ROOT/bin/term-notify-sound"
-_assert_file_exists "notify: tmux VS Code terminal uses XDG state" \
-  "$tmux_xdg_state/term-notify/signal"
-_assert_file_missing "notify: tmux XDG state bypasses HOME fallback" \
-  "$tmux_notify_home/.local/state/term-notify/signal"
+for terminal in WezTerm xterm.js unknown-terminal; do
+  tmux_notify_tty="$tmp/tmux-$terminal.tty"
+  HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%1 \
+    TMUX_CLIENT_TERMTYPE="$terminal" TMUX_PANE_TTY="$tmux_notify_tty" \
+    TERM_NOTIFY_TTY="$tmp/missing/tty" \
+    PATH="$mock_bin:$PATH" \
+    "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+  _assert_file_content "notify: tmux $terminal emits one BEL" \
+    $'\a' "$tmux_notify_tty"
+done
+_assert_file_missing "notify: tmux VS Code uses no state-file transport" \
+  "$tmp/tmux-notify-home/.local/state/term-notify/signal"
 
 _test_summary
