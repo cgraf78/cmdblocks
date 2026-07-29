@@ -1,26 +1,23 @@
-.TH TERM-NOTIFY-SOUND 1 "2026-06-30" "cmdblocks" "User Commands"
+.TH TERM-NOTIFY-SOUND 1 "2026-07-28" "cmdblocks" "User Commands"
 .SH NAME
 term-notify-sound \- emit a terminal-aware completion notification
 .SH SYNOPSIS
 .B term-notify-sound
 .SH DESCRIPTION
 .B term-notify-sound
-plays a lightweight terminal notification. It writes a WezTerm OSC user
-variable when running in WezTerm, touches a state-file signal for VS Code-style
-terminals, and falls back to a terminal bell for unknown terminals.
+plays a lightweight terminal notification by emitting one standard terminal
+bell. The terminal client renders that bell, so local and remote-development
+sessions use the same transport.
 .PP
-When running inside tmux, OSC sequences are wrapped for tmux passthrough. If
+If
 .I /dev/tty
 is unavailable, the helper attempts to write to the current pane TTY.
-.SH FILES
+.SH ENVIRONMENT
 .TP
-.I $XDG_STATE_HOME/term-notify/signal
-Signal file touched for VS Code-style terminal integrations.
-.PP
-When
-.B XDG_STATE_HOME
-is unset, empty, or not an absolute path, the signal file is written to
-.IR ~/.local/state/term-notify/signal .
+.B TERM_NOTIFY_TTY
+Override the primary terminal device, which defaults to
+.IR /dev/tty .
+The tmux pane TTY remains the fallback when this device cannot be opened.
 .SH EXIT STATUS
 .TP
 .B 0
