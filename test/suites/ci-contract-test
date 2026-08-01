@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Verify shared ShellCheck delegation without weakening the local test entrypoint.
+
+set -uo pipefail
+export NO_COLOR=1
+
+test_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+root="$(cd -- "$test_dir/.." && pwd -P)"
+
+# shellcheck source=../helpers.sh
+. "$test_dir/helpers.sh"
+
+echo "=== CI contracts ==="
+
+workflow=$(cat "$root/.github/workflows/test.yml")
+if [[ "$workflow" =~ cgraf78/actions/\.github/workflows/shell-ci\.yml@[0-9a-f]{40} ]]; then
+  _pass "workflow: pins shared ShellCheck revision"
+else
+  _fail "workflow: pins shared ShellCheck revision"
+fi
+_assert_contains "workflow: delegates the typed shell inventory" \
+  'shellcheck-inventory-path: .github/shellcheck-files.txt' "$workflow"
+_assert_contains "workflow: runtime installs only behavioral prerequisites" \
+  'profiles: base' "$workflow"
+_assert_not_contains "workflow: runtime does not reinstall ShellCheck" \
+  'profiles: base,shellcheck' "$workflow"
+_assert_contains "workflow: runtime delegates only ShellCheck execution" \
+  'test-command: CMDBLOCKS_SKIP_SHELLCHECK=1 test/cmdblocks-test' "$workflow"
+
+mock_bin=$(_tmpdir)
+shellcheck_log="$mock_bin/shellcheck.log"
+cat >"$mock_bin/shellcheck" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$CMDBLOCKS_SHELLCHECK_LOG"
+EOF
+chmod +x "$mock_bin/shellcheck"
+
+env -u CMDBLOCKS_SKIP_SHELLCHECK \
+  CMDBLOCKS_SHELLCHECK_LOG="$shellcheck_log" PATH="$mock_bin:$PATH" \
+  "$test_dir/suites/shellcheck-test" >/dev/null
+local_status=$?
+_assert_exit "runner: unset local default succeeds" 0 "$local_status"
+_assert_file_exists "runner: unset local default executes ShellCheck" \
+  "$shellcheck_log"
+_assert_contains "runner: local lint consumes inventory programs" \
+  "$root/bin/term-notify-sound" "$(cat "$shellcheck_log")"
+
+rm "$shellcheck_log"
+delegated_output=$(CMDBLOCKS_SKIP_SHELLCHECK=1 \
+  CMDBLOCKS_SHELLCHECK_LOG="$shellcheck_log" PATH="$mock_bin:$PATH" \
+  "$test_dir/suites/shellcheck-test" 2>&1)
+delegated_status=$?
+_assert_exit "runner: delegated mode succeeds" 0 "$delegated_status"
+_assert_contains "runner: delegated mode reports shared ownership" \
+  "delegated to shared CI" "$delegated_output"
+_assert_file_missing "runner: delegated CI skips only ShellCheck execution" \
+  "$shellcheck_log"
+
+_test_summary

@@ -1,45 +1,51 @@
 #!/usr/bin/env bash
-# Keep the lint inventory explicit while failing when a new shell program is
-# added without a deliberate review of whether ShellCheck should cover it.
+# Lint the reviewed program rows from the shared CI inventory.
 
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+inventory_file="$root/.github/shellcheck-files.txt"
 
-shell_files=(
-  bin/term-notify-sound
-  bin/tmux-copy-last-output
-  share/cmdblocks/shell.sh
-  test/cmdblocks-test
-  test/helpers.sh
-  test/suites/cmdblocks-behavior-test
-  test/suites/manpage-test
-  test/suites/shellcheck-test
-)
-
-tracked_shell_files=()
-while IFS= read -r path; do
-  case "$path" in
-    *.sh)
-      tracked_shell_files+=("$path")
-      ;;
+shell_files=()
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -n "$line" && "$line" != '#'* ]] || continue
+  case "$line" in
+    *$'\t'*) ;;
     *)
-      IFS= read -r first_line <"$root/$path" || true
-      case "$first_line" in
-        '#!'*sh*) tracked_shell_files+=("$path") ;;
-      esac
+      printf 'shellcheck-test: malformed inventory record\n' >&2
+      exit 1
       ;;
   esac
-done < <(git -C "$root" ls-files -- bin share test)
+  type="${line%%$'\t'*}"
+  path="${line#*$'\t'}"
+  case "$path" in
+    '' | . | .. | /* | ./* | ../* | */. | */.. | */../* | */./* | */ | *//* | *$'\n'* | *$'\t'*)
+      printf 'shellcheck-test: invalid inventory path: %s\n' "$path" >&2
+      exit 1
+      ;;
+  esac
+  if [[ -z "$type" ]]; then
+    printf 'shellcheck-test: malformed inventory record\n' >&2
+    exit 1
+  fi
+  case "$type" in
+    program) shell_files+=("$path") ;;
+    fixture) ;;
+    *)
+      printf 'shellcheck-test: unknown inventory type: %s\n' "$type" >&2
+      exit 1
+      ;;
+  esac
+done <"$inventory_file"
 
-expected_inventory="$(printf '%s\n' "${shell_files[@]}" | LC_ALL=C sort)"
-tracked_inventory="$(printf '%s\n' "${tracked_shell_files[@]}" | LC_ALL=C sort)"
-
-if [[ "$expected_inventory" != "$tracked_inventory" ]]; then
-  printf 'shellcheck-test: update the shell file inventory\n' >&2
-  printf 'expected:\n%s\ntracked:\n%s\n' \
-    "$expected_inventory" "$tracked_inventory" >&2
+if [[ "${#shell_files[@]}" -eq 0 ]]; then
+  printf 'shellcheck-test: inventory includes no programs\n' >&2
   exit 1
+fi
+
+if [[ "${CMDBLOCKS_SKIP_SHELLCHECK:-0}" = 1 ]]; then
+  printf 'shellcheck-test: delegated to shared CI\n'
+  exit 0
 fi
 
 if ! command -v shellcheck >/dev/null 2>&1; then
@@ -48,10 +54,10 @@ if ! command -v shellcheck >/dev/null 2>&1; then
 fi
 
 absolute_files=()
-for path in "${shell_files[@]}"; do
+for path in "${shell_files[@]+"${shell_files[@]}"}"; do
   absolute_files+=("$root/$path")
 done
 
-shellcheck -x -P SCRIPTDIR "${absolute_files[@]}"
+shellcheck -x -P SCRIPTDIR "${absolute_files[@]+"${absolute_files[@]}"}"
 
 printf 'shellcheck-test: ok\n'

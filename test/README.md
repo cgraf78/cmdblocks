@@ -2,15 +2,20 @@
 
 `test/cmdblocks-test` is the local and CI entrypoint. It runs every focused
 suite under `test/suites/`; the suites load shared assertions from
-`test/helpers.sh`.
+`test/helpers.sh`. Shared CI sets `CMDBLOCKS_SKIP_SHELLCHECK=1` because its
+required Ubuntu inventory job owns lint execution, while local runs lint by
+default.
 
 ## Suite Scope
 
 - `cmdblocks-behavior-test` covers the terminal command-block helpers
   (`tmux-copy-last-output`, `term-notify-sound`).
 - `manpage-test` verifies that every PATH-visible helper ships a manual page.
-- `shellcheck-test` lints the repository-owned shell inventory and fails when a
-  new shell program has not been reviewed for coverage.
+- `shellcheck-test` lints the program rows in
+  `.github/shellcheck-files.txt`; the shared action owns whole-repository drift
+  discovery.
+- `ci-contract-test` verifies the shared workflow contract and proves that
+  local-default and delegated ShellCheck modes execute as intended.
 
 Prefer fake `tmux`/terminal commands and fixture input over depending on an
 active tmux or terminal session, and add assertions to the suite that owns the
