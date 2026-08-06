@@ -12,12 +12,53 @@ root="$(cd -- "$test_dir/.." && pwd -P)"
 
 echo "=== CI contracts ==="
 
-workflow=$(cat "$root/.github/workflows/test.yml")
-if [[ "$workflow" =~ cgraf78/actions/\.github/workflows/shell-ci\.yml@[0-9a-f]{40} ]]; then
-  _pass "workflow: pins shared ShellCheck revision"
+lock_file="$root/.github/cgraf78-actions.lock"
+actions_sha=missing-lock
+if [[ -f "$lock_file" && ! -L "$lock_file" ]]; then
+  actions_sha=$(tr -d '\n' <"$lock_file")
+  if [[ "$actions_sha" =~ ^[0-9a-f]{40}$ ]] &&
+    [[ $(wc -l <"$lock_file") -eq 1 ]]; then
+    _pass "workflow: has one canonical cgraf78/actions lock"
+  else
+    _fail "workflow: has one canonical cgraf78/actions lock"
+  fi
 else
-  _fail "workflow: pins shared ShellCheck revision"
+  _fail "workflow: has one canonical cgraf78/actions lock"
 fi
+
+workflow_path="$root/.github/workflows/test.yml"
+workflow=$(cat "$workflow_path")
+retry_workflow=$(cat "$root/.github/workflows/retry-infrastructure.yml")
+actions_sync_job=$(awk '
+  /^  actions-sync:$/ { in_sync = 1 }
+  in_sync && /^  [^ ]/ && $0 != "  actions-sync:" { exit }
+  in_sync { print }
+' "$workflow_path")
+_assert_contains "workflow: pushes only the maintained main branch" \
+  'branches: [main]' "$workflow"
+_assert_contains "workflow: pins the locked shared ShellCheck revision" \
+  "cgraf78/actions/.github/workflows/shell-ci.yml@$actions_sha" "$workflow"
+_assert_contains "workflow: has the required actions synchronization job" \
+  'actions-sync:' "$actions_sync_job"
+_assert_contains "workflow: gives the synchronization job its stable check name" \
+  'name: cgraf78/actions sync' "$actions_sync_job"
+_assert_contains "workflow: synchronization job uses the standard runner" \
+  'runs-on: ubuntu-24.04' "$actions_sync_job"
+_assert_contains "workflow: synchronization job has read-only contents access" \
+  'contents: read' "$actions_sync_job"
+if [[ $(printf '%s\n' "$actions_sync_job" | grep -Ec \
+  '^[[:space:]]+- uses:[[:space:]]+actions/checkout@[0-9a-f]{40}([[:space:]]+#[^[:cntrl:]]*)?$') -eq 1 ]]; then
+  _pass "workflow: synchronization checkout is immutable"
+else
+  _fail "workflow: synchronization checkout is immutable"
+fi
+_assert_contains "workflow: synchronization checkout does not persist credentials" \
+  'persist-credentials: false' "$actions_sync_job"
+_assert_contains "workflow: verifier uses the locked actions revision" \
+  "cgraf78/actions/.github/actions/verify-consumer-sync@$actions_sha" \
+  "$actions_sync_job"
+_assert_contains "retry: uses the locked actions revision" \
+  "cgraf78/actions/.github/actions/infra-retry@$actions_sha" "$retry_workflow"
 _assert_contains "workflow: delegates the typed shell inventory" \
   'shellcheck-inventory-path: .github/shellcheck-files.txt' "$workflow"
 _assert_contains "workflow: runtime installs only behavioral prerequisites" \
