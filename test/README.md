@@ -10,6 +10,9 @@ default.
 
 - `cmdblocks-behavior-test` covers the terminal command-block helpers
   (`tmux-copy-last-output`, `term-notify-sound`).
+- `install-test` covers the standalone checkout-backed command and manpage
+  links, idempotent retargeting, custom destinations, complete source
+  preflight, and refusal to overwrite user-owned paths.
 - `manpage-test` verifies that every PATH-visible helper ships a manual page.
 - `shellcheck-test` lints the program rows in
   `.github/shellcheck-files.txt`; the shared action owns whole-repository drift
