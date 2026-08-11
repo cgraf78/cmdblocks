@@ -3,6 +3,8 @@
 program	bin/term-notify-sound
 program	bin/tmux-copy-last-output
 program	install.sh
+program	scripts/checkout-installer.conf
+program	support/install-checkout.sh
 program	share/cmdblocks/shell.sh
 program	test/cmdblocks-test
 program	test/helpers.sh
