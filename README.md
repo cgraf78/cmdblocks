@@ -11,6 +11,26 @@
 scripts are self-contained and resolve their behavior without consumer-owned
 wrapper scripts.
 
+## Install from a checkout
+
+Keep the checkout at a stable path and run:
+
+```bash
+./install.sh
+```
+
+The installer creates checkout-backed symlinks for both commands under
+`$HOME/.local/bin` and for their manual pages under
+`$HOME/.local/share/man/man1`. Set `PREFIX` to relocate both trees, or set
+`BIN_DIR` and `MAN_DIR` independently. Re-running the installer is safe and
+retargets existing symlinks, but it refuses to replace a non-symlink path.
+Moving or deleting the checkout breaks the installed links.
+
+The commands remain self-contained. The installer leaves
+`share/cmdblocks/shell.sh` in the checkout and creates no library, shared-asset,
+or completion tree. Resolve that non-binary loader through shdeps, or use its
+absolute path in this checkout.
+
 ## Public API
 
 - `bin/tmux-copy-last-output`: copy one or a positive number of recent tmux

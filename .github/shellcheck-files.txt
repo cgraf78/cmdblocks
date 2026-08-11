@@ -2,10 +2,12 @@
 # `fixture` records are discovered but intentionally excluded from ShellCheck.
 program	bin/term-notify-sound
 program	bin/tmux-copy-last-output
+program	install.sh
 program	share/cmdblocks/shell.sh
 program	test/cmdblocks-test
 program	test/helpers.sh
 program	test/suites/ci-contract-test
 program	test/suites/cmdblocks-behavior-test
+program	test/suites/install-test
 program	test/suites/manpage-test
 program	test/suites/shellcheck-test
