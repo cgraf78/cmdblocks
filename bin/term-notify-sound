@@ -20,8 +20,25 @@ send_tty_notify() {
 # notifier publishes that pane itself. Best effort: a missing or older tmux
 # must not turn a notification into an error.
 mark_tmux_pane() {
-  tmux set-option -p -t "${TMUX_PANE}" "$TERM_NOTIFY_PENDING_OPTION" 1 \
+  tmux set-option -p -t "$1" "$TERM_NOTIFY_PENDING_OPTION" 1 \
     >/dev/null 2>&1 || true
+}
+
+# Some agents (muse) run hooks with TMUX, TMUX_PANE, and TERM_PROGRAM
+# stripped, though the hook still shares the pane's terminal. Find the pane
+# whose pty is this process's controlling terminal: only a process inside that
+# pane can have it, so a match is stronger evidence than inherited variables.
+# Without TMUX this asks the default tmux server. Best effort: no terminal, no
+# usable ps, or no matching pane simply leaves nothing marked.
+pane_for_tty() {
+  local tty
+  tty=$(ps -o tty= -p "$$" 2>/dev/null) || return 1
+  tty=${tty//[[:space:]]/}
+  case $tty in
+    '' | '?' | '-') return 1 ;;
+  esac
+  tmux list-panes -a -F '#{pane_tty} #{pane_id}' 2>/dev/null |
+    awk -v tty="/dev/$tty" '$1 == tty { print $2; exit }'
 }
 
 in_tmux=0
@@ -33,14 +50,19 @@ if (send_tty_notify >>"$notify_tty") 2>/dev/null; then
   # TMUX and TMUX_PANE leak into programs launched from a tmux shell, such as
   # an editor started with `code .`, whose own terminals are not that pane.
   # tmux sets TERM_PROGRAM=tmux in its panes and a terminal emulator running
-  # inside one replaces it, so only a process still in the pane marks it. This
-  # needs no process lookup, which sandboxes and busybox may not support.
-  [ "$in_tmux" = 1 ] && [ "${TERM_PROGRAM:-}" = tmux ] && mark_tmux_pane
+  # inside one replaces it, so only a process still in the pane marks it. That
+  # check needs no process lookup, which sandboxes and busybox may not support;
+  # the terminal match runs only when the variables are absent altogether.
+  if [ -n "${TMUX_PANE:-}" ]; then
+    [ "$in_tmux" = 1 ] && [ "${TERM_PROGRAM:-}" = tmux ] && mark_tmux_pane "$TMUX_PANE"
+  else
+    pane=$(pane_for_tty) && [ -n "$pane" ] && mark_tmux_pane "$pane"
+  fi
 elif [ "$in_tmux" = 1 ]; then
   pane_tty=$(tmux display-message -t "${TMUX_PANE}" -p '#{pane_tty}' 2>/dev/null)
   if [ -n "$pane_tty" ]; then
     # Delivered to the pane itself, so the pane is the one that rang.
-    send_tty_notify >>"$pane_tty" 2>/dev/null && mark_tmux_pane
+    send_tty_notify >>"$pane_tty" 2>/dev/null && mark_tmux_pane "$TMUX_PANE"
   fi
 fi
 exit 0

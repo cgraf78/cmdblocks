@@ -40,6 +40,17 @@ and
 but runs its own terminals, which replace
 .BR TERM_PROGRAM ,
 so a leaked pane id never marks a pane that did not ring.
+.PP
+When
+.B TMUX_PANE
+is absent, as for agents that run hooks with the tmux variables removed, the
+helper looks up its controlling terminal with
+.BR ps (1)
+and marks the pane of the default tmux server whose pty is that terminal.
+Only a process inside the pane can have it, so a terminal no pane owns, a
+missing terminal, or an unusable
+.B ps
+marks nothing.
 .SH ENVIRONMENT
 .TP
 .B TERM_NOTIFY_TTY
