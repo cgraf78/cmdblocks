@@ -72,7 +72,10 @@ dependency manager's contract:
   bell against a window rather than the pane that rang it. Consumers render
   and clear that option. After ringing `/dev/tty` directly it marks only when
   `TERM_PROGRAM` is `tmux`, so an editor launched from a tmux shell, which
-  inherits `TMUX_PANE`, cannot mark that pane from its own terminals.
+  inherits `TMUX_PANE`, cannot mark that pane from its own terminals. When a
+  caller strips the tmux variables altogether, as some agents do for hooks, it
+  marks the pane of the default tmux server whose pty is its controlling
+  terminal, and marks nothing when no pane owns that terminal.
 
 Keybindings, shell hooks, and host-specific terminal config belong to the
 consumer that installs `cmdblocks`; this repo owns reusable command-boundary

@@ -231,12 +231,24 @@ case "$1" in
     [[ -z ${TMUX_SET_LOG:-} ]] || printf '%s\n' "$*" >>"$TMUX_SET_LOG"
     [[ ${TMUX_SET_FAIL:-0} != 1 ]] || exit 1
     ;;
+  list-panes)
+    [[ -z ${TMUX_LIST_LOG:-} ]] || printf '%s\n' "$*" >>"$TMUX_LIST_LOG"
+    [[ -n ${TMUX_PANES:-} ]] || exit 1
+    printf '%s\n' "$TMUX_PANES"
+    ;;
   *)
     exit 1
     ;;
 esac
 EOF
-chmod +x "$mock_bin/tmux"
+# Reports the controlling terminal the notifier asks for, as ps -o tty= does
+# (with its column padding), or fails when the test gives it none.
+cat >"$mock_bin/ps" <<'EOF'
+#!/usr/bin/env bash
+[[ -n ${PS_TTY+x} ]] || exit 1
+printf '%s\n' "$PS_TTY"
+EOF
+chmod +x "$mock_bin/tmux" "$mock_bin/ps"
 for terminal in WezTerm xterm.js unknown-terminal; do
   tmux_notify_tty="$tmp/tmux-$terminal.tty"
   HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%1 \
@@ -305,5 +317,56 @@ for missing in TMUX TMUX_PANE; do
     env -u "$missing" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
   _assert_file_missing "notify: without $missing no pane is marked" "$unmarked_log"
 done
+
+# Hooks that run with the tmux variables stripped (muse) still share the
+# pane's terminal: the pane whose pty is the controlling terminal is marked.
+panes=$'/dev/pts/50 %50\n/dev/pts/5 %5\n/dev/pts/7 %7'
+stripped_log="$tmp/tmux-stripped.log"
+env -u TMUX -u TMUX_PANE -u TERM_PROGRAM HOME="$tmp/tmux-notify-home" \
+  TERM_NOTIFY_TTY="$tmp/tmux-stripped.tty" TMUX_SET_LOG="$stripped_log" \
+  PS_TTY='pts/5   ' TMUX_PANES="$panes" PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+_assert_file_content "notify: stripped tmux env still emits one BEL" \
+  $'\a' "$tmp/tmux-stripped.tty"
+_assert_file_content "notify: stripped tmux env marks the pane owning its terminal" \
+  'set-option -p -t %5 @term_notify_pending 1' "$stripped_log"
+
+# Outside every pane (a terminal that is not tmux), or with no controlling
+# terminal at all, nothing is marked; the bell still rings.
+unmatched_index=0
+for case in 'pts/9:a terminal no pane owns' '?:no controlling terminal' \
+  ':an empty ps answer'; do
+  unmatched_index=$((unmatched_index + 1))
+  case_log="$tmp/tmux-unmatched-$unmatched_index.log"
+  env -u TMUX -u TMUX_PANE -u TERM_PROGRAM HOME="$tmp/tmux-notify-home" \
+    TERM_NOTIFY_TTY="$tmp/tmux-unmatched.tty" TMUX_SET_LOG="$case_log" \
+    PS_TTY="${case%%:*}" TMUX_PANES="$panes" PATH="$mock_bin:$PATH" \
+    "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+  _assert_file_missing "notify: ${case#*:} marks no pane" "$case_log"
+done
+
+# A failing ps (busybox without -o tty, a sandbox) or no tmux server keeps
+# the old behavior: ring, mark nothing, report nothing.
+for missing in PS_TTY TMUX_PANES; do
+  case_log="$tmp/tmux-unavailable-$missing.log"
+  case_err="$tmp/tmux-unavailable-$missing.err"
+  env HOME="$tmp/tmux-notify-home" TERM_NOTIFY_TTY="$tmp/tmux-unavailable.tty" \
+    TMUX_SET_LOG="$case_log" PS_TTY=pts/5 TMUX_PANES="$panes" \
+    PATH="$mock_bin:$PATH" \
+    env -u TMUX -u TMUX_PANE -u TERM_PROGRAM -u "$missing" \
+    "$CMDBLOCKS_ROOT/bin/term-notify-sound" 2>"$case_err"
+  _assert_exit "notify: without $missing the notification still succeeds" "0" "$?"
+  _assert_file_missing "notify: without $missing no pane is marked" "$case_log"
+  _assert_eq "notify: without $missing nothing is reported" "" "$(cat "$case_err")"
+done
+
+# With TMUX_PANE present the variables decide, as before: a leaked pane is
+# never second-guessed by a terminal lookup.
+list_log="$tmp/tmux-env-list.log"
+HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%11 TERM_PROGRAM=vscode \
+  TERM_NOTIFY_TTY="$tmp/tmux-env-list.tty" TMUX_LIST_LOG="$list_log" \
+  PS_TTY=pts/5 TMUX_PANES="$panes" PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+_assert_file_missing "notify: tmux variables skip the terminal lookup" "$list_log"
 
 _test_summary
