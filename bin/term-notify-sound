@@ -1,13 +1,28 @@
 #!/usr/bin/env bash
 # term-notify-sound — Play a terminal notification sound.
 # Emits one standard bell (BEL), rendered by the terminal client. Falls back to
-# the current tmux pane's pty when /dev/tty is unavailable.
+# the current tmux pane's pty when /dev/tty is unavailable. Inside tmux it also
+# marks the notifying pane as pending so the tmux config can show which pane
+# wants attention.
 
 set -u
+
+# Pane user option naming a pane whose program asked for attention. This
+# command only sets it; the consuming tmux config renders and clears it.
+readonly TERM_NOTIFY_PENDING_OPTION=@term_notify_pending
 
 send_tty_notify() {
   # BEL crosses local and remote ptys; the client owns sound playback.
   printf '\a'
+}
+
+# tmux attributes a bell to a window, never to the pane that rang it, so the
+# notifier publishes that pane itself. Best effort: a missing or older tmux
+# must not turn a notification into an error.
+mark_tmux_pane() {
+  [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] || return 0
+  tmux set-option -p -t "${TMUX_PANE}" "$TERM_NOTIFY_PENDING_OPTION" 1 \
+    >/dev/null 2>&1 || true
 }
 
 notify_tty="${TERM_NOTIFY_TTY:-/dev/tty}"
@@ -19,3 +34,4 @@ elif [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ]; then
     send_tty_notify >>"$pane_tty" 2>/dev/null || true
   fi
 fi
+mark_tmux_pane
