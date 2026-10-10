@@ -253,7 +253,7 @@ _assert_file_missing "notify: tmux VS Code uses no state-file transport" \
 # tmux only knows which window rang, so the notifier marks its own pane for
 # the tmux config to render. The mark accompanies both delivery routes.
 direct_set_log="$tmp/tmux-direct-set.log"
-HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%7 \
+HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%7 TERM_PROGRAM=tmux \
   TERM_NOTIFY_TTY="$tmp/tmux-direct.tty" TMUX_SET_LOG="$direct_set_log" \
   PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
 _assert_file_content "notify: tmux direct delivery still emits one BEL" \
@@ -261,16 +261,34 @@ _assert_file_content "notify: tmux direct delivery still emits one BEL" \
 _assert_file_content "notify: tmux direct delivery marks the notifying pane" \
   'set-option -p -t %7 @term_notify_pending 1' "$direct_set_log"
 
+# The pane-tty fallback delivers to the pane itself, so it marks the pane
+# whatever terminal program the caller reports.
 fallback_set_log="$tmp/tmux-fallback-set.log"
-HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%8 \
+HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%8 TERM_PROGRAM=vscode \
   TMUX_PANE_TTY="$tmp/tmux-fallback.tty" TERM_NOTIFY_TTY="$tmp/missing/tty" \
   TMUX_SET_LOG="$fallback_set_log" \
   PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
 _assert_file_content "notify: tmux pane fallback marks the notifying pane" \
   'set-option -p -t %8 @term_notify_pending 1' "$fallback_set_log"
 
+# An editor launched from a tmux shell inherits TMUX and TMUX_PANE, but its
+# own terminal replaces TERM_PROGRAM; ringing that terminal must not mark the
+# tmux pane that launched the editor.
+for leaked_program in vscode WezTerm ''; do
+  leaked_log="$tmp/tmux-leaked-${leaked_program:-unset}.log"
+  HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%11 \
+    TERM_PROGRAM="$leaked_program" \
+    TERM_NOTIFY_TTY="$tmp/tmux-leaked-${leaked_program:-unset}.tty" \
+    TMUX_SET_LOG="$leaked_log" \
+    PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound"
+  _assert_file_content "notify: leaked tmux env in ${leaked_program:-an unnamed terminal} still rings" \
+    $'\a' "$tmp/tmux-leaked-${leaked_program:-unset}.tty"
+  _assert_file_missing "notify: leaked tmux env in ${leaked_program:-an unnamed terminal} marks no pane" \
+    "$leaked_log"
+done
+
 failed_mark_err="$tmp/tmux-mark-fail.err"
-HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%9 \
+HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%9 TERM_PROGRAM=tmux \
   TERM_NOTIFY_TTY="$tmp/tmux-mark-fail.tty" TMUX_SET_FAIL=1 \
   PATH="$mock_bin:$PATH" "$CMDBLOCKS_ROOT/bin/term-notify-sound" \
   2>"$failed_mark_err"
@@ -281,7 +299,7 @@ _assert_file_content "notify: a failed pane mark still emits one BEL" \
 
 for missing in TMUX TMUX_PANE; do
   unmarked_log="$tmp/tmux-no-$missing.log"
-  env HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%10 \
+  env HOME="$tmp/tmux-notify-home" TMUX=/tmp/tmux-test TMUX_PANE=%10 TERM_PROGRAM=tmux \
     TERM_NOTIFY_TTY="$tmp/tmux-no-$missing.tty" TMUX_SET_LOG="$unmarked_log" \
     PATH="$mock_bin:$PATH" \
     env -u "$missing" "$CMDBLOCKS_ROOT/bin/term-notify-sound"

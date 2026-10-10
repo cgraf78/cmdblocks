@@ -27,6 +27,19 @@ it, for example from
 and
 .B pane-focus-out
 hooks. A failure to set it is ignored.
+.PP
+When the bell goes straight to the controlling terminal, the helper marks the
+pane only if
+.B TERM_PROGRAM
+is
+.BR tmux .
+A program launched from a tmux shell, such as an editor, inherits
+.B TMUX
+and
+.B TMUX_PANE
+but runs its own terminals, which replace
+.BR TERM_PROGRAM ,
+so a leaked pane id never marks a pane that did not ring.
 .SH ENVIRONMENT
 .TP
 .B TERM_NOTIFY_TTY
