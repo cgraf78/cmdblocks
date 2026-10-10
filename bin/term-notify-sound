@@ -1,21 +1,46 @@
 #!/usr/bin/env bash
 # term-notify-sound — Play a terminal notification sound.
 # Emits one standard bell (BEL), rendered by the terminal client. Falls back to
-# the current tmux pane's pty when /dev/tty is unavailable.
+# the current tmux pane's pty when /dev/tty is unavailable. Inside tmux it also
+# marks the notifying pane as pending so the tmux config can show which pane
+# wants attention.
 
 set -u
+
+# Pane user option naming a pane whose program asked for attention. This
+# command only sets it; the consuming tmux config renders and clears it.
+readonly TERM_NOTIFY_PENDING_OPTION=@term_notify_pending
 
 send_tty_notify() {
   # BEL crosses local and remote ptys; the client owns sound playback.
   printf '\a'
 }
 
+# tmux attributes a bell to a window, never to the pane that rang it, so the
+# notifier publishes that pane itself. Best effort: a missing or older tmux
+# must not turn a notification into an error.
+mark_tmux_pane() {
+  tmux set-option -p -t "${TMUX_PANE}" "$TERM_NOTIFY_PENDING_OPTION" 1 \
+    >/dev/null 2>&1 || true
+}
+
+in_tmux=0
+[ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && in_tmux=1
+
 notify_tty="${TERM_NOTIFY_TTY:-/dev/tty}"
 if (send_tty_notify >>"$notify_tty") 2>/dev/null; then
-  : # sent directly
-elif [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ]; then
+  # sent directly
+  # TMUX and TMUX_PANE leak into programs launched from a tmux shell, such as
+  # an editor started with `code .`, whose own terminals are not that pane.
+  # tmux sets TERM_PROGRAM=tmux in its panes and a terminal emulator running
+  # inside one replaces it, so only a process still in the pane marks it. This
+  # needs no process lookup, which sandboxes and busybox may not support.
+  [ "$in_tmux" = 1 ] && [ "${TERM_PROGRAM:-}" = tmux ] && mark_tmux_pane
+elif [ "$in_tmux" = 1 ]; then
   pane_tty=$(tmux display-message -t "${TMUX_PANE}" -p '#{pane_tty}' 2>/dev/null)
   if [ -n "$pane_tty" ]; then
-    send_tty_notify >>"$pane_tty" 2>/dev/null || true
+    # Delivered to the pane itself, so the pane is the one that rang.
+    send_tty_notify >>"$pane_tty" 2>/dev/null && mark_tmux_pane
   fi
 fi
+exit 0

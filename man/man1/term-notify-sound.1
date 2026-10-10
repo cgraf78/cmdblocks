@@ -1,4 +1,4 @@
-.TH TERM-NOTIFY-SOUND 1 "2026-07-28" "cmdblocks" "User Commands"
+.TH TERM-NOTIFY-SOUND 1 "2026-10-10" "cmdblocks" "User Commands"
 .SH NAME
 term-notify-sound \- emit a terminal-aware completion notification
 .SH SYNOPSIS
@@ -12,6 +12,34 @@ sessions use the same transport.
 If
 .I /dev/tty
 is unavailable, the helper attempts to write to the current pane TTY.
+.PP
+Inside tmux, the helper also sets the pane user option
+.B @term_notify_pending
+to
+.B 1
+on
+.BR $TMUX_PANE .
+tmux records a bell against a window, not the pane that rang it, so this
+option is how a tmux configuration can show which pane wants attention. The
+helper only sets the option; the configuration that renders it owns clearing
+it, for example from
+.B pane-focus-in
+and
+.B pane-focus-out
+hooks. A failure to set it is ignored.
+.PP
+When the bell goes straight to the controlling terminal, the helper marks the
+pane only if
+.B TERM_PROGRAM
+is
+.BR tmux .
+A program launched from a tmux shell, such as an editor, inherits
+.B TMUX
+and
+.B TMUX_PANE
+but runs its own terminals, which replace
+.BR TERM_PROGRAM ,
+so a leaked pane id never marks a pane that did not ring.
 .SH ENVIRONMENT
 .TP
 .B TERM_NOTIFY_TTY

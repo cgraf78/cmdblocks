@@ -67,7 +67,12 @@ dependency manager's contract:
   BEL travels over the terminal stream, the terminal client renders the sound
   for local shells, remote-development sessions, and tmux panes alike. Set
   `TERM_NOTIFY_TTY` only when the caller needs to override `/dev/tty`; tmux pane
-  routing remains the automatic fallback.
+  routing remains the automatic fallback. Inside tmux it also sets the pane
+  option `@term_notify_pending` to `1` on `$TMUX_PANE`, because tmux records a
+  bell against a window rather than the pane that rang it. Consumers render
+  and clear that option. After ringing `/dev/tty` directly it marks only when
+  `TERM_PROGRAM` is `tmux`, so an editor launched from a tmux shell, which
+  inherits `TMUX_PANE`, cannot mark that pane from its own terminals.
 
 Keybindings, shell hooks, and host-specific terminal config belong to the
 consumer that installs `cmdblocks`; this repo owns reusable command-boundary
