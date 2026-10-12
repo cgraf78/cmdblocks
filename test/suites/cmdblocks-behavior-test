@@ -83,18 +83,16 @@ two output' "$tmp/copied-one.txt"
 _assert_contains "copy last output: reports single block" \
   "Copied last command + output to clipboard" "$(cat "$tmp/messages.log")"
 
-# The whole history is searched, so long output never pushes its own prompt
-# out of range.
+# A 10,000-line window: long output keeps its own prompt in range, while the
+# payload stays bounded.
 TMUX_CAPTURE_FILE="$tmp/pane.txt" \
   TMUX_MESSAGE_LOG="$tmp/messages-history.log" \
   TMUX_CALL_LOG="$tmp/history-calls.log" \
   PBCOPY_OUT="$tmp/copied-history.txt" \
   PATH="$mock_bin:$PATH" \
   "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output"
-_assert_contains "copy last output: captures the whole pane history" \
-  "capture-pane -p -S -" "$(grep '^capture-pane' "$tmp/history-calls.log")"
-_assert_not_contains "copy last output: captures no fixed line window" \
-  "-S -500" "$(cat "$tmp/history-calls.log")"
+_assert_eq "copy last output: captures the last 10,000 lines" \
+  "capture-pane -p -S -10000" "$(grep '^capture-pane' "$tmp/history-calls.log")"
 
 TMUX_CAPTURE_FILE="$tmp/pane.txt" \
   TMUX_MESSAGE_LOG="$tmp/messages-one.log" \
