@@ -14,6 +14,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 
 commands=(
   term-notify-sound
+  term-pane-mark
   tmux-copy-last-output
 )
 

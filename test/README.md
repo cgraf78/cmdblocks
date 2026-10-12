@@ -9,7 +9,7 @@ default.
 ## Suite Scope
 
 - `cmdblocks-behavior-test` covers the terminal command-block helpers
-  (`tmux-copy-last-output`, `term-notify-sound`).
+  (`tmux-copy-last-output`, `term-notify-sound`, `term-pane-mark`).
 - `install-test` covers the standalone checkout-backed command and manpage
   links, idempotent retargeting, custom destinations, complete source
   preflight, and refusal to overwrite user-owned paths.

@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 # Copy the last N commands and their output from the current tmux pane to the
-# clipboard. Parses pane content for prompt boundaries to isolate
-# command+output blocks.
+# clipboard, or print them for another command to route. Parses pane content
+# for prompt boundaries to isolate command+output blocks.
 #
 # Prompt format (two-line):
 #   [exit_code] user@host:path (branch)
 #   $ command   (bash)
 #   % command   (zsh)
 #
-# Usage: tmux-copy-last-output [positive-count]   (default: 1)
+# Usage: tmux-copy-last-output [--print] [positive-count]   (default: 1)
 
 set -euo pipefail
 
 usage() {
-  printf 'usage: tmux-copy-last-output [positive-count]\n' >&2
+  printf 'usage: tmux-copy-last-output [--print] [positive-count]\n' >&2
   exit 64
 }
 
+# --print writes the blocks to stdout instead of the clipboard, so a binding
+# can route them elsewhere, such as pasting into another pane.
+print=false
+if [[ "${1-}" == --print ]]; then
+  print=true
+  shift
+fi
 (($# <= 1)) || usage
 count="${1-1}"
 if [[ ! "$count" =~ ^[0-9]+$ || ! "$count" =~ [1-9] ]]; then
@@ -91,6 +98,15 @@ END {
 
 if [[ -z "$output" ]]; then
   tmux display-message "No command output found"
+  # Both modes report it, but only a printing caller gets a status, so a
+  # pipeline routes nothing while a clipboard keybinding stays quiet. Status 3
+  # stays distinct from the 1 that an unexpected failure exits with.
+  [[ "$print" == false ]] || exit 3
+  exit 0
+fi
+
+if [[ "$print" == true ]]; then
+  printf '%s\n' "$output"
   exit 0
 fi
 
