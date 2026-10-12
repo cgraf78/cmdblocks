@@ -33,7 +33,12 @@ fi
 # an unambiguous base-10 value.
 count="${count#"${count%%[!0]*}"}"
 
-content=$(tmux capture-pane -p -S -500)
+# Search the last 10,000 lines. The old 500-line window lost a command whose
+# own output scrolled its prompt out of range, which is exactly when copying
+# it matters, but the whole history is unbounded: a 90,000-line build log
+# makes a 15 MB OSC 52 write that terminals drop (VS Code's limit is 10M
+# characters) and a paste no agent wants. 10,000 lines stays near 1 MB.
+content=$(tmux capture-pane -p -S -10000)
 
 output=$(printf '%s\n' "$content" | awk -v count="$count" '
 # Two-line prompt detection:
