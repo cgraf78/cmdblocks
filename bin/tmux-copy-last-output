@@ -33,7 +33,10 @@ fi
 # an unambiguous base-10 value.
 count="${count#"${count%%[!0]*}"}"
 
-content=$(tmux capture-pane -p -S -500)
+# Search the pane's whole history: a fixed window would lose a command whose
+# own output scrolled its prompt out of range, which is exactly when copying
+# it matters. Even a 100,000-line history parses in well under a second.
+content=$(tmux capture-pane -p -S -)
 
 output=$(printf '%s\n' "$content" | awk -v count="$count" '
 # Two-line prompt detection:

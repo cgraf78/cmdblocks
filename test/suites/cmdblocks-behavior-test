@@ -83,6 +83,19 @@ two output' "$tmp/copied-one.txt"
 _assert_contains "copy last output: reports single block" \
   "Copied last command + output to clipboard" "$(cat "$tmp/messages.log")"
 
+# The whole history is searched, so long output never pushes its own prompt
+# out of range.
+TMUX_CAPTURE_FILE="$tmp/pane.txt" \
+  TMUX_MESSAGE_LOG="$tmp/messages-history.log" \
+  TMUX_CALL_LOG="$tmp/history-calls.log" \
+  PBCOPY_OUT="$tmp/copied-history.txt" \
+  PATH="$mock_bin:$PATH" \
+  "$CMDBLOCKS_ROOT/bin/tmux-copy-last-output"
+_assert_contains "copy last output: captures the whole pane history" \
+  "capture-pane -p -S -" "$(grep '^capture-pane' "$tmp/history-calls.log")"
+_assert_not_contains "copy last output: captures no fixed line window" \
+  "-S -500" "$(cat "$tmp/history-calls.log")"
+
 TMUX_CAPTURE_FILE="$tmp/pane.txt" \
   TMUX_MESSAGE_LOG="$tmp/messages-one.log" \
   PBCOPY_OUT="$tmp/copied-explicit-one.txt" \

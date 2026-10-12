@@ -7,8 +7,9 @@ tmux-copy-last-output \- copy recent tmux command blocks to the clipboard
 .RI [ count ]
 .SH DESCRIPTION
 .B tmux-copy-last-output
-captures the current tmux pane, detects shell prompt boundaries, and copies the
-most recent command plus its output to the clipboard. When
+captures the current tmux pane's whole history, detects shell prompt
+boundaries, and copies the most recent command plus its output to the
+clipboard, however long that output is. When
 .I count
 is supplied, it must be a positive base-10 integer and the command copies that
 many recent command blocks. The default is one.
