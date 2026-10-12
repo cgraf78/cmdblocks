@@ -1,8 +1,10 @@
-.TH TERM-NOTIFY-SOUND 1 "2026-10-10" "cmdblocks" "User Commands"
+.TH TERM-NOTIFY-SOUND 1 "2026-10-12" "cmdblocks" "User Commands"
 .SH NAME
 term-notify-sound \- emit a terminal-aware completion notification
 .SH SYNOPSIS
 .B term-notify-sound
+.RB [ \-\-owner
+.IR pid ]
 .SH DESCRIPTION
 .B term-notify-sound
 plays a lightweight terminal notification by emitting one standard terminal
@@ -13,12 +15,12 @@ If
 .I /dev/tty
 is unavailable, the helper attempts to write to the current pane TTY.
 .PP
-Inside tmux, the helper also sets the pane user option
+Inside tmux, the helper also marks the pane that rang as pending with
+.BR "term-pane-mark set pending" ,
+which sets the pane user option
 .B @term_notify_pending
 to
-.B 1
-on
-.BR $TMUX_PANE .
+.BR 1 .
 tmux records a bell against a window, not the pane that rang it, so this
 option is how a tmux configuration can show which pane wants attention. The
 helper only sets the option; the configuration that renders it owns clearing
@@ -26,31 +28,27 @@ it, for example from
 .B pane-focus-in
 and
 .B pane-focus-out
-hooks. A failure to set it is ignored.
+hooks.
 .PP
-When the bell goes straight to the controlling terminal, the helper marks the
-pane only if
-.B TERM_PROGRAM
-is
-.BR tmux .
-A program launched from a tmux shell, such as an editor, inherits
-.B TMUX
-and
-.B TMUX_PANE
-but runs its own terminals, which replace
-.BR TERM_PROGRAM ,
-so a leaked pane id never marks a pane that did not ring.
-.PP
-When
-.B TMUX_PANE
-is absent, as for agents that run hooks with the tmux variables removed, the
-helper looks up its controlling terminal with
-.BR ps (1)
-and marks the pane of the default tmux server whose pty is that terminal.
-Only a process inside the pane can have it, so a terminal no pane owns, a
-missing terminal, or an unusable
-.B ps
-marks nothing.
+When the bell goes straight to the controlling terminal,
+.BR term-pane-mark (1)
+decides which pane, if any, this process owns. When the bell falls back to the
+pane's own pty, that pane is marked directly. The helper runs the
+.B term-pane-mark
+beside it, falling back to the one on
+.BR PATH ;
+a missing helper or a failed mark is ignored.
+.SH OPTIONS
+.TP
+.BI \-\-owner " pid"
+Pass
+.I pid
+to the pending mark, which then lands only while that process runs in the
+foreground of the pane's terminal; see
+.BR term-pane-mark (1).
+An agent's hook passes the agent, so a program the agent launched, which
+inherits its pane but rings through the pane fallback without a terminal of
+its own, cannot mark the agent's pane. The bell still rings.
 .SH ENVIRONMENT
 .TP
 .B TERM_NOTIFY_TTY
@@ -62,5 +60,9 @@ The tmux pane TTY remains the fallback when this device cannot be opened.
 .B 0
 The notification was emitted or intentionally ignored after best-effort
 fallbacks.
+.TP
+.B 64
+The arguments were invalid; nothing rang.
 .SH SEE ALSO
+.BR term-pane-mark (1),
 .BR tmux-copy-last-output (1)

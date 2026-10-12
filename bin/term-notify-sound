@@ -7,9 +7,25 @@
 
 set -u
 
-# Pane user option naming a pane whose program asked for attention. This
-# command only sets it; the consuming tmux config renders and clears it.
-readonly TERM_NOTIFY_PENDING_OPTION=@term_notify_pending
+usage() {
+  printf 'usage: term-notify-sound [--owner PID]\n' >&2
+  exit 64
+}
+
+# --owner names the program the notification is for, such as the agent whose
+# hook rings. Programs an agent launches inherit its pane, and without a
+# terminal of their own their bell falls back to the pane's pty; the pending
+# mark then follows term-pane-mark's owner rule, so it lands only for the
+# pane terminal's foreground program. The bell itself still rings.
+owner_args=()
+case $# in
+  0) ;;
+  2)
+    [ "$1" = --owner ] && [ -n "$2" ] || usage
+    owner_args=(--owner "$2")
+    ;;
+  *) usage ;;
+esac
 
 send_tty_notify() {
   # BEL crosses local and remote ptys; the client owns sound playback.
@@ -17,52 +33,26 @@ send_tty_notify() {
 }
 
 # tmux attributes a bell to a window, never to the pane that rang it, so the
-# notifier publishes that pane itself. Best effort: a missing or older tmux
-# must not turn a notification into an error.
-mark_tmux_pane() {
-  tmux set-option -p -t "$1" "$TERM_NOTIFY_PENDING_OPTION" 1 \
-    >/dev/null 2>&1 || true
+# notifier publishes that pane itself through term-pane-mark, which owns the
+# pane-ownership rule. Prefer the copy beside this one so a checkout or
+# installed link set stays on one revision. Best effort: a missing helper must
+# not turn a notification into an error.
+mark_pending() {
+  local marker="${BASH_SOURCE[0]%/*}/term-pane-mark"
+  [ -x "$marker" ] || marker=$(command -v term-pane-mark 2>/dev/null) || return 0
+  "$marker" set pending "$@" ${owner_args[@]+"${owner_args[@]}"} >/dev/null 2>&1 || true
 }
-
-# Some agents (muse) run hooks with TMUX, TMUX_PANE, and TERM_PROGRAM
-# stripped, though the hook still shares the pane's terminal. Find the pane
-# whose pty is this process's controlling terminal: only a process inside that
-# pane can have it, so a match is stronger evidence than inherited variables.
-# Without TMUX this asks the default tmux server. Best effort: no terminal, no
-# usable ps, or no matching pane simply leaves nothing marked.
-pane_for_tty() {
-  local tty
-  tty=$(ps -o tty= -p "$$" 2>/dev/null) || return 1
-  tty=${tty//[[:space:]]/}
-  case $tty in
-    '' | '?' | '-') return 1 ;;
-  esac
-  tmux list-panes -a -F '#{pane_tty} #{pane_id}' 2>/dev/null |
-    awk -v tty="/dev/$tty" '$1 == tty { print $2; exit }'
-}
-
-in_tmux=0
-[ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] && in_tmux=1
 
 notify_tty="${TERM_NOTIFY_TTY:-/dev/tty}"
 if (send_tty_notify >>"$notify_tty") 2>/dev/null; then
-  # sent directly
-  # TMUX and TMUX_PANE leak into programs launched from a tmux shell, such as
-  # an editor started with `code .`, whose own terminals are not that pane.
-  # tmux sets TERM_PROGRAM=tmux in its panes and a terminal emulator running
-  # inside one replaces it, so only a process still in the pane marks it. That
-  # check needs no process lookup, which sandboxes and busybox may not support;
-  # the terminal match runs only when the variables are absent altogether.
-  if [ -n "${TMUX_PANE:-}" ]; then
-    [ "$in_tmux" = 1 ] && [ "${TERM_PROGRAM:-}" = tmux ] && mark_tmux_pane "$TMUX_PANE"
-  else
-    pane=$(pane_for_tty) && [ -n "$pane" ] && mark_tmux_pane "$pane"
-  fi
-elif [ "$in_tmux" = 1 ]; then
+  # Rang the controlling terminal, so the pane is marked only if this process
+  # still owns it; term-pane-mark decides.
+  mark_pending
+elif [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ]; then
   pane_tty=$(tmux display-message -t "${TMUX_PANE}" -p '#{pane_tty}' 2>/dev/null)
   if [ -n "$pane_tty" ]; then
     # Delivered to the pane itself, so the pane is the one that rang.
-    send_tty_notify >>"$pane_tty" 2>/dev/null && mark_tmux_pane "$TMUX_PANE"
+    send_tty_notify >>"$pane_tty" 2>/dev/null && mark_pending --pane "$TMUX_PANE"
   fi
 fi
 exit 0

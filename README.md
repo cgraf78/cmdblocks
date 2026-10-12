@@ -29,7 +29,7 @@ and run:
 ./install.sh
 ```
 
-The installer creates checkout-backed symlinks for both commands under
+The installer creates checkout-backed symlinks for every command under
 `$HOME/.local/bin` and for their manual pages under
 `$HOME/.local/share/man/man1`. Set `PREFIX` to relocate both trees, or set
 `BIN_DIR` and `MAN_DIR` independently. Re-running the installer is safe and
@@ -44,8 +44,10 @@ absolute path in this checkout.
 ## Public API
 
 - `bin/tmux-copy-last-output`: copy one or a positive number of recent tmux
-  command output blocks.
+  command output blocks, or print them with `--print` for a caller to route.
 - `bin/term-notify-sound`: emit terminal-aware completion notifications.
+- `bin/term-pane-mark`: set or clear a `pending` or `busy` state mark on the
+  caller's own tmux pane.
 - `share/cmdblocks/shell.sh`: stable no-op shell loader for integration
   harnesses that source each dependency's shell API uniformly.
 
@@ -67,15 +69,28 @@ dependency manager's contract:
   BEL travels over the terminal stream, the terminal client renders the sound
   for local shells, remote-development sessions, and tmux panes alike. Set
   `TERM_NOTIFY_TTY` only when the caller needs to override `/dev/tty`; tmux pane
-  routing remains the automatic fallback. Inside tmux it also sets the pane
-  option `@term_notify_pending` to `1` on `$TMUX_PANE`, because tmux records a
-  bell against a window rather than the pane that rang it. Consumers render
-  and clear that option. After ringing `/dev/tty` directly it marks only when
-  `TERM_PROGRAM` is `tmux`, so an editor launched from a tmux shell, which
-  inherits `TMUX_PANE`, cannot mark that pane from its own terminals. When a
-  caller strips the tmux variables altogether, as some agents do for hooks, it
-  marks the pane of the default tmux server whose pty is its controlling
-  terminal, and marks nothing when no pane owns that terminal.
+  routing remains the automatic fallback. Inside tmux it also marks the pane
+  that rang as `pending` through `term-pane-mark`, because tmux records a bell
+  against a window rather than the pane that rang it. It runs the
+  `term-pane-mark` beside it, falling back to the one on `PATH`, and passes
+  `--owner PID` through to that mark.
+- `term-pane-mark set|clear pending|busy [--pane PANE] [--owner PID]` sets or
+  unsets a pane
+  user option:
+  `@term_notify_pending` for a program that asked for attention, `@term_busy`
+  for one working on a request, such as an agent between a submitted prompt
+  and its finished response. Consumers render both and clear
+  `@term_notify_pending`; the program that set `@term_busy` clears it. With
+  `--owner PID`, the mark changes only while that process runs in the
+  foreground of the pane's terminal, so an agent the pane's agent launches,
+  which inherits the pane but not its terminal, cannot set or clear its mark. The
+  caller owns `$TMUX_PANE` only while `TMUX` is set and `TERM_PROGRAM` is
+  `tmux`, so an editor launched from a tmux shell, which inherits
+  `TMUX_PANE`, cannot mark that pane from its own terminals. When a caller
+  strips the tmux variables altogether, as some agents do for hooks, it marks
+  the pane of the default tmux server whose pty is its controlling terminal
+  (read from `/proc` on Linux, otherwise from `ps`), and marks nothing when no
+  pane owns that terminal.
 
 Keybindings, shell hooks, and host-specific terminal config belong to the
 consumer that installs `cmdblocks`; this repo owns reusable command-boundary

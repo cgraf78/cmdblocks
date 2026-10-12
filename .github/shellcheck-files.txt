@@ -1,6 +1,7 @@
 # type<TAB>repository-relative path
 # `fixture` records are discovered but intentionally excluded from ShellCheck.
 program	bin/term-notify-sound
+program	bin/term-pane-mark
 program	bin/tmux-copy-last-output
 program	install.sh
 program	scripts/checkout-installer.conf

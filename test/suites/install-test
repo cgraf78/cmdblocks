@@ -21,6 +21,7 @@ _assert_contains "installer: wrapper identifies the shared generator" \
 
 commands=(
   term-notify-sound
+  term-pane-mark
   tmux-copy-last-output
 )
 

@@ -1,8 +1,9 @@
-.TH TMUX-COPY-LAST-OUTPUT 1 "2026-06-30" "cmdblocks" "User Commands"
+.TH TMUX-COPY-LAST-OUTPUT 1 "2026-10-12" "cmdblocks" "User Commands"
 .SH NAME
 tmux-copy-last-output \- copy recent tmux command blocks to the clipboard
 .SH SYNOPSIS
 .B tmux-copy-last-output
+.RB [ \-\-print ]
 .RI [ count ]
 .SH DESCRIPTION
 .B tmux-copy-last-output
@@ -12,9 +13,16 @@ most recent command plus its output to the clipboard. When
 is supplied, it must be a positive base-10 integer and the command copies that
 many recent command blocks. The default is one.
 .PP
+With
+.BR \-\-print ,
+the command writes the blocks to standard output instead of the clipboard, so
+a caller can route them elsewhere, such as pasting them into another pane.
+.PP
 The parser is tuned for the two-line prompt shape used by the surrounding
 terminal setup. If no complete command block is found, the command displays a
-tmux message and exits successfully so keybindings do not fail noisily.
+tmux message and exits successfully so keybindings do not fail noisily. With
+.BR \-\-print
+it exits with status 3 instead, so a pipeline routes nothing.
 .SH CLIPBOARD BACKENDS
 The command tries
 .BR pbcopy (1)
@@ -26,12 +34,19 @@ is set, and finally OSC 52 through the attached tmux client TTY.
 .SH EXIT STATUS
 .TP
 .B 0
-The command copied output, reported that no block was found, or displayed a
-clipboard failure message through tmux.
+The command copied or printed output, reported that no block was found without
+.BR \-\-print ,
+or displayed a clipboard failure message through tmux.
 .TP
 .B 1
 An unexpected shell, tmux, or parsing failure occurred before tmux messaging
 could report the result.
+.TP
+.B 3
+With
+.BR \-\-print ,
+no command block was found; the command reports that through tmux and prints
+nothing.
 .TP
 .B 64
 The arguments were invalid. The command writes a usage diagnostic before any
