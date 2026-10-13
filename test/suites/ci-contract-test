@@ -29,6 +29,7 @@ fi
 workflow_path="$root/.github/workflows/test.yml"
 workflow=$(cat "$workflow_path")
 retry_workflow=$(cat "$root/.github/workflows/retry-infrastructure.yml")
+automerge_workflow=$(cat "$root/.github/workflows/dependabot-automerge.yml")
 actions_sync_job=$(awk '
   /^  actions-sync:$/ { in_sync = 1 }
   in_sync && /^  [^ ]/ && $0 != "  actions-sync:" { exit }
@@ -59,6 +60,9 @@ _assert_contains "workflow: verifier uses the locked actions revision" \
   "$actions_sync_job"
 _assert_contains "retry: uses the locked actions revision" \
   "cgraf78/actions/.github/actions/infra-retry@$actions_sha" "$retry_workflow"
+_assert_contains "automerge: uses the locked actions revision" \
+  "cgraf78/actions/.github/workflows/dependabot-automerge.yml@$actions_sha" \
+  "$automerge_workflow"
 _assert_contains "workflow: delegates the typed shell inventory" \
   'shellcheck-inventory-path: .github/shellcheck-files.txt' "$workflow"
 _assert_contains "workflow: runtime installs only behavioral prerequisites" \
