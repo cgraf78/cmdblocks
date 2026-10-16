@@ -20,8 +20,34 @@ With
 the command writes the blocks to standard output instead of the clipboard, so
 a caller can route them elsewhere, such as pasting them into another pane.
 .PP
-The parser is tuned for the two-line prompt shape used by the surrounding
-terminal setup. If no complete command block is found, the command displays a
+The parser recognizes only a two-line prompt. The first line starts with
+.BR user@host: ,
+optionally preceded by an exit code such as
+.BR "[0] " ;
+the user name may contain only letters, digits, and underscores. The line
+directly below it is
+.B $
+or
+.BR % ,
+optionally followed by a space and the command, for example:
+.PP
+.RS
+.nf
+[0] user@host:~/src/project (main)
+$ make test
+.fi
+.RE
+.PP
+These bash and zsh prompt settings produce that shape:
+.PP
+.RS
+.nf
+PS1='[$?] \eu@\eh:\ew\en$ '
+PROMPT=$'[%?] %n@%m:%~\en%% '
+.fi
+.RE
+.PP
+If no complete command block is found, the command displays a
 tmux message and exits successfully so keybindings do not fail noisily. With
 .BR \-\-print
 it exits with status 3 instead, so a pipeline routes nothing.
