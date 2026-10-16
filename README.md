@@ -61,8 +61,8 @@ $ make test
 - **Line 1** starts with `user@host:`, optionally preceded by an exit code
   such as `[0] `. The user name may contain only letters, digits, and `_`;
   the host may also contain `.` and `-`. Anything after the colon is ignored.
-- **Line 2**, immediately below, is `$` (bash) or `%` (zsh), then a space and
-  the command.
+- **Line 2**, immediately below, is `$` (bash) or `%` (zsh), optionally
+  followed by a space and the command.
 
 These prompts match:
 
@@ -94,13 +94,14 @@ bind Y command-prompt -p 'Copy last N commands:' 'run-shell "TMUX_PANE=#{pane_id
 `term-notify-sound` and `term-pane-mark` set the pane options
 `@term_notify_pending` and `@term_busy` to `1`. Rendering and clearing the
 pending mark is up to your tmux config. For example, show both in pane
-borders and clear the pending mark when you visit the pane:
+borders and clear the pending mark when you visit the pane. The explicit hook
+index keeps any hooks you already have on those events:
 
 ```tmux
 set -g pane-border-status top
 set -g pane-border-format '#{?@term_notify_pending,[!] ,}#{?@term_busy,[busy] ,}#{pane_current_command}'
-set-hook -g after-select-pane 'set-option -pu @term_notify_pending'
-set-hook -g after-select-window 'set-option -pu @term_notify_pending'
+set-hook -g after-select-pane[100] 'set-option -pu @term_notify_pending'
+set-hook -g after-select-window[100] 'set-option -pu @term_notify_pending'
 ```
 
 ## Commands
