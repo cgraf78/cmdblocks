@@ -2,11 +2,16 @@
 
 ## About
 
+Retired: the three commands moved to cgraf78/tmux-tools, where all changes
+now go. Don't change `bin/`, `man/`, or the installer here: hosts that still
+declare cmdblocks link these files, and they must stay identical to the
+tmux-tools copies until every host has switched. The README only points to
+tmux-tools.
+
 `cmdblocks` is three self-contained Bash commands for tmux: copying recent
 command output (`tmux-copy-last-output`), ringing the bell and marking the
-pane (`term-notify-sound`), and pane state marks (`term-pane-mark`). The
-README is the user guide; each command's man page holds the detailed
-behavior.
+pane (`term-notify-sound`), and pane state marks (`term-pane-mark`). Each
+command's man page holds the detailed behavior.
 
 ## Layout
 
@@ -25,8 +30,8 @@ behavior.
 - `@term_notify_pending` and `@term_busy` (pane options set to `1`) are
   read by users' tmux configs. Don't rename them.
 - `tmux-copy-last-output` parses one two-line prompt shape (header comment
-  and awk patterns in the script). If the patterns change, update the
-  README "Prompt format" section and the man page with them.
+  and awk patterns in the script). If the patterns change, update the man
+  page with them.
 - Every command is best effort inside tmux: missing tmux, panes, or helpers
   must not turn the caller's work into an error. Exit 64 is reserved for
   bad arguments; `tmux-copy-last-output --print` exits 3 when it finds no
